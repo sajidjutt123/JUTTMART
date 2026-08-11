@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05060f">
+<title>JUTT MART — Premium Dry Fruits &amp; Next-Gen Electronics</title>
+<meta name="description" content="JUTT MART delivers premium hand-picked dry fruits and modern electronics across Pakistan. Shop almonds, cashews, pistachios, earbuds, smartwatches and more with fast Lahore delivery.">
+<meta name="keywords" content="dry fruits Pakistan, almonds Lahore, cashews, pistachios, earbuds, smartwatch, power bank, JUTT MART">
+<meta name="author" content="JUTT MART">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="JUTT MART — Premium Dry Fruits & Next-Gen Electronics">
+<meta property="og:description" content="Hand-picked dry fruits and modern gadgets, delivered across Pakistan.">
+<meta property="og:image" content="images/og-cover.jpg">
+<meta name="twitter:image" content="images/og-cover.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛒</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="aurora"></div>
+<div class="grid-overlay"></div>
+<canvas id="bg-canvas"></canvas>
+<div class="scanline"></div>
+
+<!-- ============================================================== NAV -->
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#top" class="logo">
+      <span class="logo-mark">🛒</span>
+      <span>JUTT<span class="grad-text">MART</span></span>
+    </a>
+
+    <nav class="nav-links" id="nav-links">
+      <a href="#top" class="active">Home</a>
+      <a href="#categories">Categories</a>
+      <a href="#shop">Shop</a>
+      <a href="#why">Why Us</a>
+      <a href="#contact">Contact</a>
+    </nav>
+
+    <div class="nav-actions">
+      <button class="icon-btn" id="cart-btn" aria-label="Open cart">
+        🛍️<span class="cart-count" id="cart-count">0</span>
+      </button>
+      <button class="icon-btn burger" id="burger" aria-label="Menu">☰</button>
+    </div>
+  </div>
+</header>
+
+<main class="shell" id="top">
+
+  <!-- ========================================================== HERO -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-badge">
+        <span class="pulse-dot"></span> Now delivering across Pakistan
+      </div>
+
+      <h1>
+        <span class="line">PREMIUM PICKS,</span>
+        <span class="line grad-text">FUTURE READY</span>
+      </h1>
+
+      <p class="hero-sub">
+        Hand-sorted dry fruits and next-generation electronics — curated by JUTT MART,
+        sealed fresh, and shipped from Lahore to your door.
+      </p>
+
+      <div class="hero-cta">
+        <a href="#shop" class="btn">Explore the store →</a>
+        <a href="#categories" class="btn ghost">Browse categories</a>
+      </div>
+
+      <div class="hero-stats">
+        <div>
+          <div class="stat-num" id="stat-products">0</div>
+          <div class="stat-label">Products</div>
+        </div>
+        <div>
+          <div class="stat-num" id="stat-orders">0</div>
+          <div class="stat-label">Orders shipped</div>
+        </div>
+        <div>
+          <div class="stat-num" id="stat-rating">0</div>
+          <div class="stat-label">Avg rating</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scroll-hint">
+      <div class="mouse"></div>
+      Scroll
+    </div>
+  </section>
+
+  <!-- ==================================================== CATEGORIES -->
+  <section id="categories">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="eyebrow">Collections</div>
+          <h2 class="section-title">Shop by <span class="grad-text">category</span></h2>
+          <p class="section-sub">
+            Three curated aisles. Every item vetted for quality before it reaches the shelf.
+          </p>
+        </div>
+      </div>
+      <div class="cat-grid" id="cat-grid"></div>
+    </div>
+  </section>
+
+  <!-- ========================================================== SHOP -->
+  <section id="shop">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="eyebrow">The catalogue</div>
+          <h2 class="section-title">Everything in <span class="grad-text">stock</span></h2>
+          <p class="section-sub">Live inventory, server-verified pricing, instant cart.</p>
+        </div>
+      </div>
+
+      <div class="controls reveal">
+        <div class="chips" id="chips"></div>
+
+        <label class="field">
+          <span aria-hidden="true">🔍</span>
+          <input id="search" type="search" placeholder="Search products…" aria-label="Search products">
+        </label>
+
+        <label class="field">
+          <span aria-hidden="true">⇅</span>
+          <select id="sort" aria-label="Sort products">
+            <option value="featured">Featured</option>
+            <option value="price-asc">Price: low to high</option>
+            <option value="price-desc">Price: high to low</option>
+            <option value="rating">Top rated</option>
+            <option value="popular">Most viewed</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="product-grid" id="product-grid"></div>
+    </div>
+  </section>
+
+  <!-- =========================================================== WHY -->
+  <section id="why">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="eyebrow">Why JUTT MART</div>
+          <h2 class="section-title">Built on <span class="grad-text">trust</span></h2>
+        </div>
+      </div>
+
+      <div class="feat-grid">
+        <div class="feat reveal">
+          <div class="ico">🚚</div>
+          <h4>Fast nationwide delivery</h4>
+          <p>Dispatched within 24 hours from Lahore. Free above Rs 5,000.</p>
+        </div>
+        <div class="feat reveal">
+          <div class="ico">🔒</div>
+          <h4>Cash on delivery</h4>
+          <p>Pay when it arrives. No card details, no risk, no surprises.</p>
+        </div>
+        <div class="feat reveal">
+          <div class="ico">✅</div>
+          <h4>Quality checked</h4>
+          <p>Every batch inspected and sealed before it leaves the shelf.</p>
+        </div>
+        <div class="feat reveal">
+          <div class="ico">💬</div>
+          <h4>Real human support</h4>
+          <p>Message us on Instagram and get a reply from an actual person.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================= CONTACT -->
+  <section id="contact">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div>
+          <div class="eyebrow">Get in touch</div>
+          <h2 class="section-title">Let's <span class="grad-text">talk</span></h2>
+          <p class="section-sub">Questions, bulk orders or custom hampers — we reply fast.</p>
+        </div>
+      </div>
+
+      <div class="contact-grid">
+        <div class="contact-panel reveal">
+          <div class="contact-row">
+            <div class="ico">📸</div>
+            <div><div class="k">Instagram</div><div class="v">@sajid.anonymous</div></div>
+          </div>
+          <div class="contact-row">
+            <div class="ico">📧</div>
+            <div><div class="k">Email</div><div class="v">juttboys4540@gmail.com</div></div>
+          </div>
+          <div class="contact-row">
+            <div class="ico">📍</div>
+            <div><div class="k">Location</div><div class="v">Lahore, Pakistan</div></div>
+          </div>
+          <div class="contact-row">
+            <div class="ico">🕒</div>
+            <div><div class="k">Hours</div><div class="v">Mon – Sat, 10am – 9pm PKT</div></div>
+          </div>
+
+          <a class="ig-btn" href="https://www.instagram.com/sajid.anonymous/" target="_blank" rel="noopener">
+            📸 Message on Instagram
+          </a>
+        </div>
+
+        <div class="contact-panel reveal">
+          <form class="form" id="contact-form">
+            <input class="input" name="name" placeholder="Your name" required minlength="2">
+            <input class="input" name="contact" placeholder="Phone, email or Instagram" required minlength="5">
+            <textarea class="textarea" name="message" placeholder="How can we help?" required minlength="5"></textarea>
+            <div class="form-msg" id="contact-msg"></div>
+            <button class="btn wide" type="submit">Send message</button>
+            <p class="form-note">We typically reply within a few hours.</p>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============================================================ FOOTER -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <a href="#top" class="logo">
+        <span class="logo-mark">🛒</span>
+        <span>JUTT<span class="grad-text">MART</span></span>
+      </a>
+      <nav class="foot-links">
+        <a href="#categories">Categories</a>
+        <a href="#shop">Shop</a>
+        <a href="#why">Why Us</a>
+        <a href="#contact">Contact</a>
+        <a href="https://www.instagram.com/sajid.anonymous/" target="_blank" rel="noopener">Instagram</a>
+      </nav>
+    </div>
+    <p class="copy">© <span id="year">2026</span> JUTT MART · Built in Lahore, Pakistan · All rights reserved.</p>
+  </div>
+</footer>
+
+<!-- ============================================================ CART -->
+<div class="overlay" id="overlay"></div>
+
+<aside class="drawer" id="drawer" aria-label="Shopping cart">
+  <div class="drawer-head">
+    <h3>Your cart</h3>
+    <button class="icon-btn" data-close aria-label="Close cart">✕</button>
+  </div>
+  <div class="drawer-body" id="cart-body"></div>
+  <div class="drawer-foot" id="cart-foot"></div>
+</aside>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true">
+  <div class="modal-card" id="modal-card"></div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
