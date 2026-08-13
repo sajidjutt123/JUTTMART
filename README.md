@@ -121,6 +121,71 @@ and submitting the contact form.
 
 ---
 
+## Deploy (make it live)
+
+This is a **Node app**, not a static site, so GitHub Pages cannot host it. Any
+Node host works — config files for the common ones are already in the repo.
+
+The server reads three environment variables:
+
+| Variable      | Default              | Purpose                          |
+| ------------- | -------------------- | -------------------------------- |
+| `PORT`        | `3000`               | Port to listen on (hosts set it) |
+| `HOST`        | `0.0.0.0`            | Bind address                     |
+| `JUTTMART_DB` | `server/juttmart.db` | SQLite file location             |
+
+### Render — easiest, free tier
+
+1. Go to [render.com](https://render.com) and sign in with GitHub.
+2. **New +** → **Blueprint** → pick the `JUTTMART` repo.
+3. Render reads [`render.yaml`](render.yaml) and deploys. Done.
+
+Live at `https://juttmart.onrender.com`. Free instances sleep after ~15 min of
+inactivity and take ~30 s to wake on the next visit.
+
+### Railway
+
+1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub**.
+2. Pick the repo. It autodetects Node and runs `npm start`.
+
+### Fly.io — best for Pakistan (Singapore region, keeps orders)
+
+```bash
+fly launch --no-deploy
+fly volumes create juttmart_data --size 1 --region sin
+fly deploy
+```
+
+Uses [`fly.toml`](fly.toml) + [`Dockerfile`](Dockerfile). The volume keeps the
+SQLite database across deploys.
+
+### Any Docker host
+
+```bash
+docker build -t juttmart .
+docker run -p 3000:3000 -v juttmart_data:/data juttmart
+```
+
+### Custom domain
+
+The repo previously had a `CNAME` for GitHub Pages. On a Node host you instead
+add the domain in the host's dashboard and point DNS at it:
+
+- **Render:** Settings → Custom Domains → add `juttmart.com`, then create the
+  `CNAME` record it shows you.
+- **Fly:** `fly certs add juttmart.com`
+
+HTTPS is issued automatically on all of the above.
+
+### Data persistence warning
+
+On free tiers the filesystem is **ephemeral** — the product catalogue re-seeds
+on every boot (fine), but **customer orders are wiped on redeploy**. For real
+orders, either attach a persistent disk (Fly volume, or a paid Render disk) or
+swap SQLite for a hosted Postgres.
+
+---
+
 ## Notes
 
 - The SQLite file (`server/*.db`) is gitignored — the catalogue re-seeds on boot,

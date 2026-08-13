@@ -1,0 +1,28 @@
+# Render.com blueprint for JUTT MART
+# Deploy: push to GitHub, then on render.com choose
+# "New +" -> "Blueprint" -> pick this repo. Render reads this file.
+services:
+  - type: web
+    name: juttmart
+    runtime: node
+    plan: free
+    region: singapore # closest region to Pakistan
+    branch: main
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # Where the SQLite file lives. On the free plan the filesystem is
+      # ephemeral, so orders reset on each redeploy. To keep them, upgrade
+      # the plan and uncomment the `disk` block below.
+      - key: JUTTMART_DB
+        value: /var/data/juttmart.db
+    # disk:
+    #   name: juttmart-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
