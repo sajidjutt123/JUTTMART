@@ -148,22 +148,36 @@ The server reads four environment variables:
 | `JUTTMART_DB`   | `server/juttmart.db` | SQLite file location (SQLite backend only)       |
 | `DATABASE_URL`  | *(unset)*            | Managed Postgres connection string — set it and orders/messages persist across restarts |
 
-### Render — easiest, free tier
+### Render + Neon — fully free, permanent (recommended)
 
-1. Go to [render.com](https://render.com) and sign in with GitHub.
-2. **New +** → **Blueprint** → pick the `JUTTMART` repo.
-3. Render reads [`render.yaml`](render.yaml), deploys the web service **and
-   creates the Postgres database** it's wired to (`DATABASE_URL` is set
-   automatically). Done.
+Web hosting and the database are both free **and** permanent — no credit card
+anywhere, and orders survive redeploys:
 
-Live at `https://juttmart.onrender.com`. Free instances sleep after ~15 min of
-inactivity and take ~30 s to wake on the next visit.
+1. **Code** — this repo is on GitHub already.
+2. **Database** — go to [neon.tech](https://neon.tech), sign in with GitHub
+   (free plan, no card), **Create project**, pick region **Singapore** (fastest
+   from Pakistan), and copy the connection string.
+3. **Web** — go to [render.com](https://render.com), sign in with GitHub,
+   **New +** → **Blueprint** → pick the `JUTTMART` repo. Render reads
+   [`render.yaml`](render.yaml) and deploys the web service.
+4. **Connect** — in Render, open your service → **Environment**, paste the
+   Neon connection string as `DATABASE_URL`, save, and hit **Deploy**.
 
-> ⚠️ **Render's free Postgres is deleted 30 days after creation** unless you
-> upgrade it. For a permanent free database, create one on
-> [Neon](https://neon.tech) (or [Supabase](https://supabase.com)) and paste its
-> connection string into Render → your service → **Environment** as
-> `DATABASE_URL` — the app accepts any provider's URL, no code changes needed.
+Done — live at `https://juttmart.onrender.com`. Check `https://juttmart.onrender.com/api/health`
+shows `"storage":"postgres"`; place a test order, then push a change and
+confirm the order is still there after the redeploy.
+
+> ⚠️ Render also offers a free Postgres, but it is **deleted after ~30–90 days**
+> unless upgraded — fine for a demo, wrong for a live shop. Neon's free tier is
+> permanent (0.5 GB storage, 100 compute-hours/month, scale-to-zero). For a
+> shop this size that is effectively unlimited — a decade of orders and
+> messages is a few MB, and the database only runs while your site is being
+> used. Supabase is an equivalent alternative (its free projects pause after a
+> week of inactivity, so Neon is the better default here).
+
+Free-tier behavior: the web service sleeps after ~15 min without visitors and
+takes ~30 s to wake on the next request. A free [UptimeRobot](https://uptimerobot.com)
+monitor hitting `/api/health` every 5 minutes keeps it warm at $0.
 
 ### Railway
 
@@ -207,7 +221,7 @@ redeploy**. Two ways to keep them:
 
 1. **Set `DATABASE_URL` to a managed Postgres** (recommended — works on every
    host, no disk to manage). Orders and messages are written to Postgres and
-   survive restarts; the blueprint on Render wires this up automatically.
+   survive restarts. See [Render + Neon above](#render--neon--fully-free-permanent-recommended).
 2. **Attach a persistent disk** for the SQLite file — Fly volume (see above) or
    a paid Render disk (uncomment the `disk:` block in `render.yaml`).
 

@@ -1,6 +1,11 @@
 # Render.com blueprint for JUTT MART
 # Deploy: push to GitHub, then on render.com choose
 # "New +" -> "Blueprint" -> pick this repo. Render reads this file.
+#
+# Fully-free setup (recommended): this blueprint deploys the web service and
+# leaves DATABASE_URL for you to fill in. Create a free Postgres on Neon
+# (permanent free tier, no credit card) and paste its connection string into
+# Render -> your service -> Environment -> DATABASE_URL, then Deploy.
 services:
   - type: web
     name: juttmart
@@ -19,27 +24,23 @@ services:
         value: production
       # Where the SQLite file lives while no DATABASE_URL is set. On the free
       # plan the filesystem is ephemeral, so SQLite orders reset on redeploy.
-      # Setting DATABASE_URL (below) moves orders/messages to Postgres.
       - key: JUTTMART_DB
         value: /var/data/juttmart.db
-      # Wired automatically to the `juttmart-db` Postgres instance below.
-      # To use a provider with a permanent free tier instead (Neon, Supabase),
-      # delete this block and add `- key: DATABASE_URL` with `sync: false`,
-      # then paste their connection string in the Render dashboard.
+      # Your Neon (or Supabase) Postgres connection string goes here — set it
+      # once in the Render dashboard after the first deploy. sync: false means
+      # Render creates the variable but leaves the value to you.
       - key: DATABASE_URL
-        fromDatabase:
-          name: juttmart-db
-          property: connectionString
+        sync: false
     # disk:
     #   name: juttmart-data
     #   mountPath: /var/data
     #   sizeGB: 1
 
-# ⚠️ Render's free Postgres is deleted 30 days after creation unless upgraded
-# (https://render.com/docs/free). The app reads DATABASE_URL generically, so
-# you can point it at any Postgres (Neon/Supabase free tier, a paid Render
-# database, ...) without code changes.
-databases:
-  - name: juttmart-db
-    databaseName: juttmart
-    plan: free
+# Optional: let the blueprint auto-create a Render Postgres instead. Handy for
+# a quick 30-day demo, but NOT for a permanent free setup — Render deletes
+# free databases after ~30-90 days unless you upgrade. For a database that
+# lasts, use Neon/Supabase via DATABASE_URL above (see README).
+# databases:
+#   - name: juttmart-db
+#     databaseName: juttmart
+#     plan: free
