@@ -1,12 +1,12 @@
 /**
- * Re-seed the catalogue into the SQLite database.
+ * Re-seed the catalogue into the active database (SQLite or Postgres).
  *   npm run seed
  */
 import { seed, queries } from './db.js';
 
-seed();
+await seed();
 
-const stats = queries.stats();
+const stats = await queries.stats();
 console.log('\n  ✅ Catalogue seeded');
 console.log(`     products : ${stats.products}`);
 console.log(`     orders   : ${stats.orders}`);

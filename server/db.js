@@ -1,28 +1,32 @@
 /**
- * Persistence layer for JUTT MART.
+ * Persistence layer for JUTT MART — SQLite by default, Postgres optional.
  *
- * Uses Node's built-in `node:sqlite` module (Node >= 22) so there is no native
- * build step and no external database server to run. The file lives at
- * server/juttmart.db and is created + seeded automatically on first boot.
+ * No `DATABASE_URL`  → Node's built-in `node:sqlite` (Node >= 22): no native
+ *                      build step, no database server to run. The file lives
+ *                      at server/juttmart.db (or $JUTTMART_DB) and is created
+ *                      + seeded automatically on first boot.
+ * `DATABASE_URL` set → managed Postgres via `pg` (Render, Neon, Supabase, …).
+ *                      Orders and messages then survive redeploys/restarts,
+ *                      which free-tier ephemeral filesystems cannot offer.
+ *
+ * Both backends expose the same async query interface, so `server/index.js`
+ * and the seed script never need to know which one is active. If Postgres is
+ * configured but unreachable at boot, the app logs a loud warning and falls
+ * back to SQLite so the storefront stays up.
  */
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import pg from 'pg';
 
 import { PRODUCTS, CATEGORIES } from './data/products.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = process.env.JUTTMART_DB || join(__dirname, 'juttmart.db');
+const { Pool } = pg;
 
-mkdirSync(dirname(DB_PATH), { recursive: true });
-
-export const db = new DatabaseSync(DB_PATH);
-
-db.exec('PRAGMA journal_mode = WAL');
-db.exec('PRAGMA foreign_keys = ON');
-
-db.exec(`
+/* ------------------------------------------------------------------ schema */
+const SHARED_SCHEMA = `
   CREATE TABLE IF NOT EXISTS categories (
     slug     TEXT PRIMARY KEY,
     name     TEXT NOT NULL,
@@ -63,20 +67,123 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 
-  CREATE TABLE IF NOT EXISTS messages (
+  CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+  CREATE INDEX IF NOT EXISTS idx_orders_created   ON orders(created_at DESC);
+`;
+
+const MESSAGE_TABLE = {
+  sqlite: `CREATE TABLE IF NOT EXISTS messages (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       TEXT NOT NULL,
     contact    TEXT NOT NULL,
     body       TEXT NOT NULL,
     created_at TEXT NOT NULL
-  );
+  );`,
+  postgres: `CREATE TABLE IF NOT EXISTS messages (
+    id         BIGSERIAL PRIMARY KEY,
+    name       TEXT NOT NULL,
+    contact    TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );`,
+};
 
-  CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
-  CREATE INDEX IF NOT EXISTS idx_orders_created   ON orders(created_at DESC);
-`);
+/* --------------------------------------------------------------- adapters */
+/** node:sqlite adapter — synchronous under the hood, awaited at call sites. */
+class SqliteDb {
+  constructor(path) {
+    mkdirSync(dirname(path), { recursive: true });
+    this.db = new DatabaseSync(path);
+    this.db.exec('PRAGMA journal_mode = WAL');
+    this.db.exec('PRAGMA foreign_keys = ON');
+  }
+
+  exec(sql) {
+    this.db.exec(sql);
+  }
+
+  prepare(sql) {
+    const stmt = this.db.prepare(sql);
+    return {
+      run: (...p) => stmt.run(...p),
+      get: (...p) => stmt.get(...p),
+      all: (...p) => stmt.all(...p),
+    };
+  }
+}
+
+/**
+ * pg adapter — rewrites `?` placeholders to `$1, $2, …` so the exact same SQL
+ * strings work on both backends, then awaits the pool.
+ */
+class PgDb {
+  constructor(connectionString) {
+    // Managed providers (Neon, Supabase, Render) require TLS. We skip SSL only
+    // for loopback hosts (local dev). rejectUnauthorized: false keeps proxies
+    // and custom domains from breaking the handshake.
+    const local = /@(localhost|127\.0\.0\.1|0\.0\.0\.0)(:|$)/.test(connectionString);
+    this.pool = new Pool({
+      connectionString,
+      max: 5,
+      connectionTimeoutMillis: 5000,
+      ...(local ? {} : { ssl: { rejectUnauthorized: false } }),
+    });
+    this.pool.on('error', (err) => console.error('[pg] idle client error:', err.message));
+  }
+
+  async exec(sql) {
+    await this.pool.query(sql);
+  }
+
+  prepare(sql) {
+    let i = 0;
+    const text = sql.replace(/\?/g, () => `$${++i}`);
+    return {
+      run: async (...p) => {
+        const r = await this.pool.query(text, p);
+        return { changes: r.rowCount ?? 0 };
+      },
+      get: async (...p) => (await this.pool.query(text, p)).rows[0] ?? null,
+      all: async (...p) => (await this.pool.query(text, p)).rows,
+    };
+  }
+}
+
+/* --------------------------------------------------------------- selection */
+let db;
+export let backend = process.env.DATABASE_URL ? 'postgres' : 'sqlite';
+
+function openSqlite() {
+  db = new SqliteDb(process.env.JUTTMART_DB || join(__dirname, 'juttmart.db'));
+  backend = 'sqlite';
+}
+
+function openPostgres(url) {
+  db = new PgDb(url);
+  backend = 'postgres';
+}
+
+if (backend === 'postgres') openPostgres(process.env.DATABASE_URL);
+else openSqlite();
+
+/** Create schema + seed the catalogue; Postgres failures degrade to SQLite. */
+async function initDb() {
+  try {
+    await db.exec(SHARED_SCHEMA + MESSAGE_TABLE[backend]);
+    await seed();
+  } catch (err) {
+    if (backend !== 'postgres') throw err;
+    console.error('[db] ⚠️  Postgres unreachable —', err.message);
+    console.error('[db]    Falling back to SQLite: the store stays up, but orders');
+    console.error('[db]    will NOT survive redeploys. Fix DATABASE_URL to persist them.');
+    openSqlite();
+    await db.exec(SHARED_SCHEMA + MESSAGE_TABLE[backend]);
+    await seed();
+  }
+}
 
 /** Insert catalogue rows if they are missing; never clobbers live counters. */
-export function seed() {
+export async function seed() {
   const upsertCategory = db.prepare(`
     INSERT INTO categories (slug, name, tagline, accent, icon, position)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -84,9 +191,9 @@ export function seed() {
       name = excluded.name, tagline = excluded.tagline,
       accent = excluded.accent, icon = excluded.icon, position = excluded.position
   `);
-  CATEGORIES.forEach((c, i) =>
-    upsertCategory.run(c.slug, c.name, c.tagline, c.accent, c.icon, i),
-  );
+  for (const [i, c] of CATEGORIES.entries()) {
+    await upsertCategory.run(c.slug, c.name, c.tagline, c.accent, c.icon, i);
+  }
 
   // Preserve `views` across restarts: only the descriptive columns are updated.
   const upsertProduct = db.prepare(`
@@ -102,7 +209,7 @@ export function seed() {
       highlights = excluded.highlights
   `);
   for (const p of PRODUCTS) {
-    upsertProduct.run(
+    await upsertProduct.run(
       p.slug, p.name, p.unit, p.category, p.price, p.compareAt ?? null,
       p.image, p.rating, p.reviews, p.stock, p.badge ?? null, p.blurb,
       JSON.stringify(p.highlights ?? []),
@@ -110,7 +217,7 @@ export function seed() {
   }
 }
 
-/** Map a raw SQLite row into the JSON shape the frontend consumes. */
+/** Map a raw row into the JSON shape the frontend consumes. */
 export function rowToProduct(row) {
   if (!row) return null;
   const price = row.price;
@@ -136,9 +243,10 @@ export function rowToProduct(row) {
 }
 
 export const queries = {
-  allCategories: () => db.prepare('SELECT * FROM categories ORDER BY position').all(),
+  allCategories: async () =>
+    db.prepare('SELECT * FROM categories ORDER BY position').all(),
 
-  products({ category, search, sort = 'featured', limit = 100 } = {}) {
+  async products({ category, search, sort = 'featured', limit = 100 } = {}) {
     const where = [];
     const params = [];
     if (category && category !== 'all') {
@@ -164,12 +272,13 @@ export const queries = {
     return db.prepare(sql).all(...params, Math.min(Number(limit) || 100, 200));
   },
 
-  productBySlug: (slug) => db.prepare('SELECT * FROM products WHERE slug = ?').get(slug),
+  productBySlug: async (slug) =>
+    db.prepare('SELECT * FROM products WHERE slug = ?').get(slug),
 
-  bumpViews: (slug) =>
+  bumpViews: async (slug) =>
     db.prepare('UPDATE products SET views = views + 1 WHERE slug = ?').run(slug),
 
-  insertOrder: (o) =>
+  insertOrder: async (o) =>
     db
       .prepare(
         `INSERT INTO orders (id, name, contact, city, note, items,
@@ -179,26 +288,26 @@ export const queries = {
       .run(o.id, o.name, o.contact, o.city, o.note, JSON.stringify(o.items),
            o.subtotal, o.shipping, o.total, o.status, o.createdAt),
 
-  orderById: (id) => db.prepare('SELECT * FROM orders WHERE id = ?').get(id),
+  orderById: async (id) => db.prepare('SELECT * FROM orders WHERE id = ?').get(id),
 
-  insertMessage: (m) =>
+  insertMessage: async (m) =>
     db
-      .prepare(
-        'INSERT INTO messages (name, contact, body, created_at) VALUES (?, ?, ?, ?)',
-      )
+      .prepare('INSERT INTO messages (name, contact, body, created_at) VALUES (?, ?, ?, ?)')
       .run(m.name, m.contact, m.body, m.createdAt),
 
-  stats() {
-    const p = db.prepare('SELECT COUNT(*) n FROM products').get();
-    const o = db.prepare('SELECT COUNT(*) n, COALESCE(SUM(total),0) s FROM orders').get();
-    const v = db.prepare('SELECT COALESCE(SUM(views),0) n FROM products').get();
+  async stats() {
+    // COUNT/SUM arrive as strings on Postgres (INT8) — Number() normalises.
+    const p = await db.prepare('SELECT COUNT(*) n FROM products').get();
+    const o = await db.prepare('SELECT COUNT(*) n, COALESCE(SUM(total),0) s FROM orders').get();
+    const v = await db.prepare('SELECT COALESCE(SUM(views),0) n FROM products').get();
     return {
-      products: p.n,
-      orders: o.n,
-      revenue: o.s,
-      views: v.n,
+      products: Number(p.n),
+      orders: Number(o.n),
+      revenue: Number(o.s),
+      views: Number(v.n),
     };
   },
 };
 
-seed();
+/* Boot: create schema + seed the catalogue. */
+await initDb();

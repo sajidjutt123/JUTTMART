@@ -1,8 +1,9 @@
 # 🛒 JUTT MART
 
 A futuristic storefront for premium dry fruits and electronics — built as a
-single-page app with a real Node/Express + SQLite backend, a WebGL particle
-backdrop and 3D interactions throughout.
+single-page app with a real Node/Express backend (SQLite by default, optional
+Postgres for persistent orders), a WebGL particle backdrop and 3D interactions
+throughout.
 
 ![JUTT MART](public/images/og-cover.jpg)
 
@@ -15,13 +16,14 @@ npm install
 npm start          # http://localhost:3000
 ```
 
-| Script          | What it does                                     |
-| --------------- | ------------------------------------------------ |
-| `npm start`     | Run the server on port 3000                      |
-| `npm run dev`   | Same, with auto-reload (`node --watch`)          |
-| `npm run seed`  | Re-seed the product catalogue into SQLite        |
-| `npm test`      | Headless UI smoke test (jsdom) — 23 checks       |
-| `npm run test:api` | API contract tests — 42 checks                |
+| Script             | What it does                                     |
+| ------------------ | ------------------------------------------------ |
+| `npm start`        | Run the server on port 3000                      |
+| `npm run dev`      | Same, with auto-reload (`node --watch`)          |
+| `npm run seed`     | Re-seed the product catalogue (SQLite or Postgres) |
+| `npm test`         | Headless UI smoke test (jsdom) — 23 checks       |
+| `npm run test:api` | API contract tests — 42 checks                   |
+| `npm run test:wa`  | UI smoke test in watch mode — reruns on every save |
 
 > Requires **Node 22+** (uses the built-in `node:sqlite` module, so there is no
 > native build step and no database server to install).
@@ -32,8 +34,18 @@ npm start          # http://localhost:3000
 
 ### Backend — `server/`
 
-A small REST API over SQLite. The database file is created and seeded
-automatically on first boot.
+A small REST API with two interchangeable storage backends, selected at boot:
+
+- **SQLite** (default, zero setup) — Node's built-in `node:sqlite`; the file is
+  created and seeded automatically on first boot.
+- **Postgres** — set the `DATABASE_URL` environment variable and the same code
+  talks to any managed Postgres (Render, Neon, Supabase, …). Orders and
+  messages then survive redeploys and restarts — see
+  [Deploy → Data persistence](#data-persistence).
+
+If Postgres is configured but unreachable, the app logs a warning and falls
+back to SQLite so the storefront stays up (`/api/health` reports which backend
+is live under `storage`).
 
 | Endpoint                  | Method | Purpose                                        |
 | ------------------------- | ------ | ---------------------------------------------- |
@@ -60,8 +72,9 @@ automatically on first boot.
   `/api/*` at 300 req/min, and all input is length-limited and trimmed.
 - All user-supplied strings are HTML-escaped before rendering.
 
-**Tables:** `categories`, `products`, `orders`, `messages` — with WAL mode and
-indexes on `products.category` and `orders.created_at`.
+**Tables:** `categories`, `products`, `orders`, `messages` — with indexes on
+`products.category` and `orders.created_at` (SQLite additionally runs in WAL
+mode; Postgres needs no extra setup).
 
 ### Frontend — `public/`
 
@@ -97,7 +110,7 @@ public/
   images/             product photography + OG cover
 server/
   index.js            Express app, routes, security middleware
-  db.js               SQLite schema, seeding, queries
+  db.js               SQLite/Postgres schema, seeding, queries (auto-detects DATABASE_URL)
   seed.js             manual re-seed entry point
   data/products.js    canonical catalogue
 scripts/
@@ -126,22 +139,31 @@ and submitting the contact form.
 This is a **Node app**, not a static site, so GitHub Pages cannot host it. Any
 Node host works — config files for the common ones are already in the repo.
 
-The server reads three environment variables:
+The server reads four environment variables:
 
-| Variable      | Default              | Purpose                          |
-| ------------- | -------------------- | -------------------------------- |
-| `PORT`        | `3000`               | Port to listen on (hosts set it) |
-| `HOST`        | `0.0.0.0`            | Bind address                     |
-| `JUTTMART_DB` | `server/juttmart.db` | SQLite file location             |
+| Variable        | Default              | Purpose                                          |
+| --------------- | -------------------- | ------------------------------------------------ |
+| `PORT`          | `3000`               | Port to listen on (hosts set it)                 |
+| `HOST`          | `0.0.0.0`            | Bind address                                     |
+| `JUTTMART_DB`   | `server/juttmart.db` | SQLite file location (SQLite backend only)       |
+| `DATABASE_URL`  | *(unset)*            | Managed Postgres connection string — set it and orders/messages persist across restarts |
 
 ### Render — easiest, free tier
 
 1. Go to [render.com](https://render.com) and sign in with GitHub.
 2. **New +** → **Blueprint** → pick the `JUTTMART` repo.
-3. Render reads [`render.yaml`](render.yaml) and deploys. Done.
+3. Render reads [`render.yaml`](render.yaml), deploys the web service **and
+   creates the Postgres database** it's wired to (`DATABASE_URL` is set
+   automatically). Done.
 
 Live at `https://juttmart.onrender.com`. Free instances sleep after ~15 min of
 inactivity and take ~30 s to wake on the next visit.
+
+> ⚠️ **Render's free Postgres is deleted 30 days after creation** unless you
+> upgrade it. For a permanent free database, create one on
+> [Neon](https://neon.tech) (or [Supabase](https://supabase.com)) and paste its
+> connection string into Render → your service → **Environment** as
+> `DATABASE_URL` — the app accepts any provider's URL, no code changes needed.
 
 ### Railway
 
@@ -177,19 +199,30 @@ add the domain in the host's dashboard and point DNS at it:
 
 HTTPS is issued automatically on all of the above.
 
-### Data persistence warning
+### Data persistence
 
-On free tiers the filesystem is **ephemeral** — the product catalogue re-seeds
-on every boot (fine), but **customer orders are wiped on redeploy**. For real
-orders, either attach a persistent disk (Fly volume, or a paid Render disk) or
-swap SQLite for a hosted Postgres.
+On free tiers the filesystem is **ephemeral**, so with plain SQLite the
+catalogue re-seeds on every boot (fine) but **customer orders are wiped on
+redeploy**. Two ways to keep them:
+
+1. **Set `DATABASE_URL` to a managed Postgres** (recommended — works on every
+   host, no disk to manage). Orders and messages are written to Postgres and
+   survive restarts; the blueprint on Render wires this up automatically.
+2. **Attach a persistent disk** for the SQLite file — Fly volume (see above) or
+   a paid Render disk (uncomment the `disk:` block in `render.yaml`).
+
+The app never mixes backends in one process: whichever is active at boot (see
+`storage` in `/api/health`) handles everything, and the schema is created
+automatically either way.
 
 ---
 
 ## Notes
 
 - The SQLite file (`server/*.db`) is gitignored — the catalogue re-seeds on boot,
-  while orders and messages are runtime data.
+  while orders and messages are runtime data. With Postgres, everything lives
+  in the hosted database instead.
+- `npm run seed` works against whichever backend is active.
 - `three.js` is vendored into `public/vendor/` so the site works without a CDN.
 - Shipping: flat **Rs 250**, free over **Rs 5,000** (configured in
   `server/index.js`).

@@ -17,12 +17,29 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
-      # Where the SQLite file lives. On the free plan the filesystem is
-      # ephemeral, so orders reset on each redeploy. To keep them, upgrade
-      # the plan and uncomment the `disk` block below.
+      # Where the SQLite file lives while no DATABASE_URL is set. On the free
+      # plan the filesystem is ephemeral, so SQLite orders reset on redeploy.
+      # Setting DATABASE_URL (below) moves orders/messages to Postgres.
       - key: JUTTMART_DB
         value: /var/data/juttmart.db
+      # Wired automatically to the `juttmart-db` Postgres instance below.
+      # To use a provider with a permanent free tier instead (Neon, Supabase),
+      # delete this block and add `- key: DATABASE_URL` with `sync: false`,
+      # then paste their connection string in the Render dashboard.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: juttmart-db
+          property: connectionString
     # disk:
     #   name: juttmart-data
     #   mountPath: /var/data
     #   sizeGB: 1
+
+# ⚠️ Render's free Postgres is deleted 30 days after creation unless upgraded
+# (https://render.com/docs/free). The app reads DATABASE_URL generically, so
+# you can point it at any Postgres (Neon/Supabase free tier, a paid Render
+# database, ...) without code changes.
+databases:
+  - name: juttmart-db
+    databaseName: juttmart
+    plan: free

@@ -2,7 +2,7 @@
   "name": "juttmart",
   "version": "2.0.0",
   "private": true,
-  "description": "JUTT MART - futuristic 3D storefront with a Node/Express + SQLite backend",
+  "description": "JUTT MART - futuristic 3D storefront with a Node/Express backend (SQLite by default, Postgres optional)",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
@@ -10,7 +10,8 @@
     "dev": "node --watch server/index.js",
     "seed": "node server/seed.js",
     "test": "node scripts/smoke.mjs",
-    "test:api": "node scripts/api-test.mjs"
+    "test:api": "node scripts/api-test.mjs",
+    "test:wa": "node --watch scripts/smoke.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -22,6 +23,7 @@
     "express": "^4.22.2",
     "express-rate-limit": "^8.6.2",
     "helmet": "^8.3.0",
+    "pg": "^8.23.0",
     "three": "^0.185.1"
   },
   "devDependencies": {

@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { queries, rowToProduct } from './db.js';
+import { queries, rowToProduct, backend } from './db.js';
 import { HERO_IMAGES } from './data/products.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -70,13 +70,21 @@ app.use(
 const asInt = (v, d = 0) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : d);
 const clean = (v, max = 400) => String(v ?? '').trim().slice(0, max);
 
+/** Express 4 does not catch rejected promises — wrap async handlers. */
+const ah = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 function shippingFor(subtotal) {
   return subtotal >= FREE_SHIPPING_OVER || subtotal === 0 ? 0 : SHIPPING_FLAT;
 }
 
 /* --------------------------------------------------------------------- API */
 app.get('/api/health', (_req, res) =>
-  res.json({ ok: true, uptime: Math.round(process.uptime()), now: new Date().toISOString() }),
+  res.json({
+    ok: true,
+    storage: backend, // 'sqlite' (default) or 'postgres' (DATABASE_URL set)
+    uptime: Math.round(process.uptime()),
+    now: new Date().toISOString(),
+  }),
 );
 
 app.get('/api/config', (_req, res) =>
@@ -94,36 +102,37 @@ app.get('/api/config', (_req, res) =>
   }),
 );
 
-app.get('/api/categories', (_req, res) => res.json({ categories: queries.allCategories() }));
+app.get('/api/categories', ah(async (_req, res) =>
+  res.json({ categories: await queries.allCategories() }),
+));
 
-app.get('/api/products', (req, res) => {
+app.get('/api/products', ah(async (req, res) => {
   const { category, search, sort, limit } = req.query;
-  const rows = queries.products({ category, search, sort, limit });
+  const rows = await queries.products({ category, search, sort, limit });
   res.json({ count: rows.length, products: rows.map(rowToProduct) });
-});
+}));
 
-app.get('/api/products/:slug', (req, res) => {
-  const row = queries.productBySlug(req.params.slug);
+app.get('/api/products/:slug', ah(async (req, res) => {
+  const row = await queries.productBySlug(req.params.slug);
   if (!row) return res.status(404).json({ error: 'Product not found' });
-  queries.bumpViews(req.params.slug);
-  const related = queries
-    .products({ category: row.category, limit: 5 })
+  await queries.bumpViews(req.params.slug);
+  const related = (await queries.products({ category: row.category, limit: 5 }))
     .filter((r) => r.slug !== row.slug)
     .slice(0, 4)
     .map(rowToProduct);
   res.json({ product: rowToProduct(row), related });
-});
+}));
 
-app.get('/api/stats', (_req, res) => res.json(queries.stats()));
+app.get('/api/stats', ah(async (_req, res) => res.json(await queries.stats())));
 
 /** Server-authoritative cart pricing — the client never dictates totals. */
-app.post('/api/cart/quote', (req, res) => {
+app.post('/api/cart/quote', ah(async (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 50) : [];
   const lines = [];
   let subtotal = 0;
 
   for (const raw of items) {
-    const row = queries.productBySlug(clean(raw?.slug, 80));
+    const row = await queries.productBySlug(clean(raw?.slug, 80));
     if (!row) continue;
     const qty = Math.max(1, Math.min(asInt(raw?.qty, 1), 99));
     const lineTotal = row.price * qty;
@@ -149,9 +158,9 @@ app.post('/api/cart/quote', (req, res) => {
     freeShippingOver: FREE_SHIPPING_OVER,
     remainingForFreeShipping: Math.max(0, FREE_SHIPPING_OVER - subtotal),
   });
-});
+}));
 
-app.post('/api/orders', (req, res) => {
+app.post('/api/orders', ah(async (req, res) => {
   const name = clean(req.body?.name, 80);
   const contact = clean(req.body?.contact, 120);
   const city = clean(req.body?.city, 80);
@@ -166,7 +175,7 @@ app.post('/api/orders', (req, res) => {
   const lines = [];
   let subtotal = 0;
   for (const raw of items) {
-    const row = queries.productBySlug(clean(raw?.slug, 80));
+    const row = await queries.productBySlug(clean(raw?.slug, 80));
     if (!row) continue;
     const qty = Math.max(1, Math.min(asInt(raw?.qty, 1), 99));
     subtotal += row.price * qty;
@@ -185,25 +194,25 @@ app.post('/api/orders', (req, res) => {
     status: 'pending',
     createdAt: new Date().toISOString(),
   };
-  queries.insertOrder(order);
+  await queries.insertOrder(order);
   res.status(201).json({ order });
-});
+}));
 
-app.get('/api/orders/:id', (req, res) => {
-  const row = queries.orderById(clean(req.params.id, 40));
+app.get('/api/orders/:id', ah(async (req, res) => {
+  const row = await queries.orderById(clean(req.params.id, 40));
   if (!row) return res.status(404).json({ error: 'Order not found' });
   res.json({ order: { ...row, items: JSON.parse(row.items) } });
-});
+}));
 
-app.post('/api/messages', (req, res) => {
+app.post('/api/messages', ah(async (req, res) => {
   const name = clean(req.body?.name, 80);
   const contact = clean(req.body?.contact, 120);
   const body = clean(req.body?.message, 1000);
   if (name.length < 2 || contact.length < 5 || body.length < 5)
     return res.status(400).json({ error: 'Please fill in every field.' });
-  queries.insertMessage({ name, contact, body, createdAt: new Date().toISOString() });
+  await queries.insertMessage({ name, contact, body, createdAt: new Date().toISOString() });
   res.status(201).json({ ok: true, message: 'Thanks! We will get back to you shortly.' });
-});
+}));
 
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Unknown endpoint' }));
 
